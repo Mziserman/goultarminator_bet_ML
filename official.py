@@ -5,16 +5,20 @@ from scrapy.spiders import CrawlSpider, Rule
 
 
 class OfficialSpider(CrawlSpider):
+    handle_httpstatus_list = [429]
+
     name = 'official'
     start_urls = [
         'http://www.dofus.com/fr/mmorpg/communaute/tournois/goultarminator/calendrier?date=2016-08-01#jt_list/',
         'http://www.dofus.com/fr/mmorpg/communaute/tournois/goultarminator/calendrier?date=2016-08-03#jt_list/',
-        'http://www.dofus.com/fr/mmorpg/communaute/tournois/goultarminator/calendrier?date=2016-08-04#jt_list/',
+        # 'http://www.dofus.com/fr/mmorpg/communaute/tournois/goultarminator/calendrier?date=2016-08-05#jt_list/',
     ]
+
 
     def parse(self, response):
         for href in response.css('table.ak-ladder tr td:last-child a::attr(href)'):
             url_object = response.urljoin(self.make_url(href.extract()))
+            
 
             yield scrapy.Request(url_object, callback=self.parse_combat_result_page)
 
@@ -43,6 +47,8 @@ class OfficialSpider(CrawlSpider):
                     winner['name'] = names[i]
                     winner['url'] = self.make_url(urls[i])
                 else:
+                    print(names[i])
+                    print(winner_name)
                     loser['name'] = names[i]
                     loser['url'] = self.make_url(urls[i])
 

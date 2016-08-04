@@ -9,8 +9,12 @@ import re
 class OfficialSpider(CrawlSpider):
     name = 'official'
     start_urls = []
-    done = []
-    servers = {}
+
+    def __init__(self, category=None):
+        self.done = []
+        self.done_server = []
+        self.working_server = []
+        self.servers = {}
 
     def start_requests(self):
         with open('games.json') as data_file:
@@ -59,6 +63,9 @@ class OfficialSpider(CrawlSpider):
         else:
             self.servers[team['server']]['teams'].append(team)
             if len(self.servers[team['server']]['teams']) == 4:
-                yield self.servers[team['server']]
-            else:
-            	print(team['server'])
+                server = self.servers[team['server']]
+                self.done_servers.append(team['server'])
+                self.working_servers.remove(team['server'])
+                del self.servers[team['server']]
+                yield server
+        print(len(self.servers))
