@@ -12,31 +12,60 @@ class OfficialSpider(CrawlSpider):
 
     def __init__(self, category=None):
         self.done = []
-        self.done_server = []
-        self.working_server = []
+        self.done_servers = []
+        self.working_servers = []
+        self.last_done_servers = []
+        self.last_working_servers = []
+        self.done_team = []
         self.servers = {}
+        self.iterations = 0
 
     def start_requests(self):
         with open('games.json') as data_file:
             games = json.load(data_file)
-            for game in games:
-                yield Request(game['winner']['url'], self.parse)
-                yield Request(game['loser']['url'], self.parse)
+            if self.iterations == 0:
+                for game in games:
+                    if game['winner']['name'][:-2] not in self.done_servers:
+                        if game['winner']['name'] not in self.done_team:
+                            yield Request(game['winner']['url'], self.parse)
+                    if game['loser']['name'][:-2] not in self.done_servers:
+                        if game['loser']['name'] not in self.done_team:
+                            yield Request(game['loser']['url'], self.parse)
+            else:
+                for game in games:
+                    if game['winner']['name'][:-2] not in self.done_servers and game['winner']['name'][:-2] in self.last_working_servers:
+                        if game['winner']['name'] not in self.done_team:
+                            yield Request(game['winner']['url'], self.parse)
+                    if game['loser']['name'][:-2] not in self.done_servers and game['loser']['name'][:-2] in self.last_working_servers:
+                        if game['loser']['name'] not in self.done_team:
+                            yield Request(game['loser']['url'], self.parse)
+
+
+        if len(self.last_working_servers) - len(self.working_servers) > 0:
+            self.iterations += 1
+            server = game['winner']['name'][:-2]
+
+            self.last_working_servers = self.working_servers
+            self.working_servers = []
+            self.last_done_servers = self.done_servers
+            self.done_servers = []
+
+            self.start_requests()
+
+        
+
+
 
     def parse(self, response):
         players = []
         team = {}
         team['players'] = players
 
-        team['id'] = response.url.split('/')[-1][:+4]
-
-        if team['id'] in self.done:
-            yield
-        else:
-            self.done.append(team['id'])
-
         team['name'] = re.sub('-', ' ', response.url.split('/')[-1][+5:])
+        if team['name'] not in self.done_team:
+            self.done_team.append(team['name'])
         team['server'] = team['name'][:-2]
+
 
         composition = []
 
@@ -60,12 +89,24 @@ class OfficialSpider(CrawlSpider):
             server['name'] = team['server']
             server['teams'] = [team]
             self.servers[server['name']] = server
+            self.working_servers.append(server['name'])
+
         else:
             self.servers[team['server']]['teams'].append(team)
+
             if len(self.servers[team['server']]['teams']) == 4:
                 server = self.servers[team['server']]
+
                 self.done_servers.append(team['server'])
                 self.working_servers.remove(team['server'])
+
+                for team in self.servers[team['server']]['teams']:
+                    self.done_team.remove(team['name'])
+
                 del self.servers[team['server']]
                 yield server
-        print(len(self.servers))
+
+        print("Serveur livrés : {} {}".format(len(self.done_servers), self.done_servers))
+        print("Serveur non livrés : {} {}".format(len(self.working_servers), self.working_servers))
+        print("iteration n° {}".format(self.iterations))
+        
