@@ -11,102 +11,92 @@ class OfficialSpider(CrawlSpider):
     start_urls = []
 
     def __init__(self, category=None):
-        self.done = []
-        self.done_servers = []
-        self.working_servers = []
-        self.last_done_servers = []
-        self.last_working_servers = []
-        self.done_team = []
         self.servers = {}
-        self.iterations = 0
+        self.done_teams = []
 
     def start_requests(self):
+        with open('teams.json') as data_file:
+            servers = json.load(data_file)
+            for server in servers:
+                print(server)
+                for team in server['teams']:
+                    self.done_teams.append(team['name'])
+                # print(self.done_teams)
+
         with open('games.json') as data_file:
             games = json.load(data_file)
-            if self.iterations == 0:
-                for game in games:
-                    if game['winner']['name'][:-2] not in self.done_servers:
-                        if game['winner']['name'] not in self.done_team:
-                            yield Request(game['winner']['url'], self.parse)
-                    if game['loser']['name'][:-2] not in self.done_servers:
-                        if game['loser']['name'] not in self.done_team:
-                            yield Request(game['loser']['url'], self.parse)
-            else:
-                for game in games:
-                    if game['winner']['name'][:-2] not in self.done_servers and game['winner']['name'][:-2] in self.last_working_servers:
-                        if game['winner']['name'] not in self.done_team:
-                            yield Request(game['winner']['url'], self.parse)
-                    if game['loser']['name'][:-2] not in self.done_servers and game['loser']['name'][:-2] in self.last_working_servers:
-                        if game['loser']['name'] not in self.done_team:
-                            yield Request(game['loser']['url'], self.parse)
-
-
-        if len(self.last_working_servers) - len(self.working_servers) > 0:
-            self.iterations += 1
-            server = game['winner']['name'][:-2]
-
-            self.last_working_servers = self.working_servers
-            self.working_servers = []
-            self.last_done_servers = self.done_servers
-            self.done_servers = []
-
-            self.start_requests()
-
-        
-
-
+            for game in games:
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(game['winner']['name'])
+                print(self.done_teams)
+                if game['winner']['name'].lower() not in self.done_teams:
+                    yield Request(game['winner']['url'], self.parse)
+                if game['loser']['name'].lower() not in self.done_teams:
+                    yield Request(game['loser']['url'], self.parse)
 
     def parse(self, response):
-        players = []
+        servers = self.create_servers(response)
+        yield servers
+        
+    def create_servers(self, response):
         team = {}
-        team['players'] = players
 
         team['name'] = re.sub('-', ' ', response.url.split('/')[-1][+5:])
-        if team['name'] not in self.done_team:
-            self.done_team.append(team['name'])
         team['server'] = team['name'][:-2]
 
+        self.get_players_and_composition(response, team)
+        
+        if team['server'] not in self.servers:
+            self.create_server(team)
 
-        composition = []
+        else:
+            return self.append_team(team)
 
+    def create_server(self, team):
+        server = {
+            'name': team['server'],
+            'teams': [
+                team
+            ]
+        }
+        self.servers[server['name']] = server
+
+    def append_team(self, team):
+        server_teams = self.servers[team['server']]['teams']
+        if team not in server_teams:
+            server_teams.append(team)
+
+        if len(server_teams) == 4:
+            return self.return_server(team)
+
+    def return_server(self, team):
+        server = self.servers[team['server']]
+        for team in server['teams']:
+            self.done_teams.append(team['name'])
+        del self.servers[team['server']]
+        for team in server['teams']:
+            self.done_teams.append(team['name'])
+        return server
+
+    def get_players_and_composition(self, response, team):
+        team['composition'] = []
+        team['players'] = []
         for div in response.css('.ak-panel-content .ak-list-element .ak-content'):
             name = div.css('.ak-title a strong::text').extract_first()
-            classe = div.css('.ak-text::text').extract_first()
-            classe = classe[:-11]
+            classe = div.css('.ak-text::text').extract_first()[:-11]
 
-            if classe not in composition:
-                composition.append(classe)
+            if classe not in team['composition']:
+                team['composition'].append(classe)
 
             player = {}
             player['name'] = name
             player['classe'] = classe
             team['players'].append(player)
 
-        team['composition'] = composition
+        return team
 
-        if team['server'] not in self.servers:
-            server = {}
-            server['name'] = team['server']
-            server['teams'] = [team]
-            self.servers[server['name']] = server
-            self.working_servers.append(server['name'])
-
-        else:
-            self.servers[team['server']]['teams'].append(team)
-
-            if len(self.servers[team['server']]['teams']) == 4:
-                server = self.servers[team['server']]
-
-                self.done_servers.append(team['server'])
-                self.working_servers.remove(team['server'])
-
-                for team in self.servers[team['server']]['teams']:
-                    self.done_team.remove(team['name'])
-
-                del self.servers[team['server']]
-                yield server
-
-        print("Serveur livrés : {} {}".format(len(self.done_servers), self.done_servers))
-        print("Serveur non livrés : {} {}".format(len(self.working_servers), self.working_servers))
-        print("iteration n° {}".format(self.iterations))
-        
